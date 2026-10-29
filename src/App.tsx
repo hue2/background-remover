@@ -1,7 +1,4 @@
-
 import './App.css';
-import React, {useState} from 'react';
-import removeBackground from './background-remover';
 
 function App() {
 
