@@ -1,22 +1,20 @@
-import sharp from "sharp";
-
 type BackgroundRemoverProps = {
-    input: string;
+    input: Blob;
     hex?: string;
     tolerance?: number;
     softness?: number;
 }
 
-export default async function RemoveBackground(props: BackgroundRemoverProps) {
+export default async function removeBackground(props: BackgroundRemoverProps) {
   const {
     input,
     hex = "#FFFFFF",
-    tolerance = 200,
-    softness = 50,
+    tolerance = 60,
+    softness = 40,
   } = props;
 
   if (!input) {
-      throw new Error("Input file path is required.");
+      throw new Error("Input file is required.");
   }
 
   const color = hex.replace(/^#/, "");
@@ -35,18 +33,31 @@ export default async function RemoveBackground(props: BackgroundRemoverProps) {
     parseInt(color.slice(4, 6), 16),
   ];
 
-  const { data } = await sharp(input)
-    .toColourspace("srgb")
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  const bitmap = await createImageBitmap(input);
 
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Could not create a 2D canvas context.");
+  }
+
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
 
   for (let i = 0; i < data.length; i += 4) {
   //calculate the Euclidean distance between the user's targeted background color vs the current's image color
     const distance = Math.hypot(
+      //red
       data[i] - background[0],
+      //green
       data[i + 1] - background[1],
+      //blue
       data[i + 2] - background[2]
     );
 
@@ -58,6 +69,7 @@ export default async function RemoveBackground(props: BackgroundRemoverProps) {
     //data[i] = red, data[i + 1] = green, data[i + 2] = blue, data[i + 3] = transparency (alpha channel)
     //if the opacity for the current pixel is 0, set all channels to 0 (fully transparent) and continue to the next pixel
     if (opacity === 0) {
+      //red       //green     //blue         //alpha/transparency
       data[i] = data[i + 1] = data[i + 2] = data[i + 3] = 0;
       continue;
     }
@@ -78,6 +90,8 @@ export default async function RemoveBackground(props: BackgroundRemoverProps) {
     data[i + 3] = Math.round(data[i + 3] * opacity);
   }
 
-  const imageBase64 = `data:image/jpeg;base64,${data.toString('base64')}`;
-  return imageBase64; 
+  context.putImageData(imageData, 0, 0);
+
+  //PNG keeps the alpha channel; JPEG would flatten the transparency
+  return canvas.toDataURL("image/png");
 }
