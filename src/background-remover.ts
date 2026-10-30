@@ -1,5 +1,5 @@
 type BackgroundRemoverProps = {
-    input: Blob;
+    input?: Blob;
     hex?: string;
     tolerance?: number;
     softness?: number;
